@@ -1,0 +1,14 @@
+package com.vortex.bagstate.domain;
+
+public enum BagState {
+    CHECKED_IN,
+    FLIGHT_VERIFIED,
+    FLIGHT_VERIFICATION_FAILED,
+    ROUTE_PLANNED,
+    ROUTING_BLOCKED,
+    MOVEMENT_PENDING,
+    IN_TRANSIT,
+    AT_INTERMEDIATE_NODE,
+    MOVEMENT_FAILED,
+    AT_MAKEUP
+}

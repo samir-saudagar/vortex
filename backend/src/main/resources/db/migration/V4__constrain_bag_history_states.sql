@@ -1,0 +1,11 @@
+ALTER TABLE vortex.bag_history
+    ADD CONSTRAINT ck_bag_history_previous_state CHECK (previous_state IS NULL OR previous_state IN (
+        'CHECKED_IN', 'FLIGHT_VERIFIED', 'FLIGHT_VERIFICATION_FAILED', 'ROUTE_PLANNED',
+        'ROUTING_BLOCKED', 'MOVEMENT_PENDING', 'IN_TRANSIT', 'AT_INTERMEDIATE_NODE',
+        'MOVEMENT_FAILED', 'AT_MAKEUP'
+    )),
+    ADD CONSTRAINT ck_bag_history_current_state CHECK (current_state IS NULL OR current_state IN (
+        'CHECKED_IN', 'FLIGHT_VERIFIED', 'FLIGHT_VERIFICATION_FAILED', 'ROUTE_PLANNED',
+        'ROUTING_BLOCKED', 'MOVEMENT_PENDING', 'IN_TRANSIT', 'AT_INTERMEDIATE_NODE',
+        'MOVEMENT_FAILED', 'AT_MAKEUP'
+    ));

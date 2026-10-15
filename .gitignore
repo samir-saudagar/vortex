@@ -1,0 +1,41 @@
+# Local secrets and machine-specific environment
+.env
+.env.*
+!.env.example
+
+# Gradle and Java output
+.gradle/
+**/build/
+*.class
+
+# Frontend dependencies and generated output
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+
+# Python environments and generated files
+simulator/.venv/
+simulator/.local/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Local IntelliJ state
+.idea/workspace.xml
+.idea/shelf/
+.idea/httpRequests/
+*.iml
+
+
+# Python test and type-checking artifacts
+.coverage
+htmlcov/
+.ruff_cache/
+
+# Local environment and editor files
+.DS_Store
+.vscode/
+
+.idea/
+*.iml

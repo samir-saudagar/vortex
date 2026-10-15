@@ -1,0 +1,9 @@
+[project]
+name = "vortex-simulator"
+version = "0.1.0"
+description = "Local equipment simulator process for the VORTEX baggage-routing demo"
+requires-python = ">=3.13,<3.14"
+dependencies = ["kafka-python==3.0.11"]
+
+[dependency-groups]
+dev = ["pytest>=8.3,<10"]

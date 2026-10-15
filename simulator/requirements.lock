@@ -1,0 +1,1 @@
+# Dependency lock is maintained in uv.lock; use `uv sync --project simulator`.

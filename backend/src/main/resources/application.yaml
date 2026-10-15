@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: vortex
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      acks: all
+      retries: 2147483647
+      properties:
+        enable.idempotence: true
+        # Quarantine preserves source bytes and keys, including Base64/JSON-escaping overhead.
+        # Source topics stay at 2 MiB; the event-envelope validator stays at 1 MiB.
+        max.request.size: 33554432
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+    listener:
+      ack-mode: record
+      auto-startup: ${VORTEX_KAFKA_CONSUMERS_ENABLED:false}
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/vortex?currentSchema=vortex}
+    username: ${POSTGRES_USER:vortex}
+    password: ${POSTGRES_PASSWORD:vortex-local}
+  flyway:
+    schemas: vortex
+    default-schema: vortex
+    create-schemas: true
+    validate-on-migrate: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        readiness:
+          include: readinessState,db,outbox
+        liveness:
+          include: livenessState
+
+vortex:
+  kafka:
+    topics:
+      workflow-events: vortex.workflow-events
+      equipment-commands: vortex.equipment-commands
+      simulator-reports: vortex.simulator-reports
+      quarantine: vortex.quarantine
+    groups:
+      workflow: vortex-workflow
+      simulator-reports: vortex-java-simulator-reports
+  outbox:
+    poll-interval-ms: ${VORTEX_OUTBOX_POLL_INTERVAL_MS:500}
+    claim-lease-seconds: ${VORTEX_OUTBOX_CLAIM_LEASE_SECONDS:30}
+    publish-timeout-seconds: ${VORTEX_OUTBOX_PUBLISH_TIMEOUT_SECONDS:10}
+
+server:
+  address: 127.0.0.1
+  port: ${SERVER_PORT:8080}
