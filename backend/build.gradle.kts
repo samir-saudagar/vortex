@@ -18,6 +18,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.10.0")
     implementation("org.springframework.kafka:spring-kafka")
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
@@ -37,6 +38,7 @@ tasks.test {
     inputs.property("vortexDatabaseIntegrationEnabled", databaseIntegrationEnabled)
     inputs.property("vortexKafkaIntegrationEnabled", providers.environmentVariable("VORTEX_KAFKA_INTEGRATION_TEST").orElse("false"))
     inputs.property("vortexPhase3KafkaEnabled", providers.environmentVariable("VORTEX_PHASE3_KAFKA_TEST").orElse("false"))
+    inputs.property("vortexPhase4KafkaEnabled", providers.environmentVariable("VORTEX_PHASE4_KAFKA_TEST").orElse("false"))
     useJUnitPlatform()
     testLogging {
         events("passed", "skipped", "failed")

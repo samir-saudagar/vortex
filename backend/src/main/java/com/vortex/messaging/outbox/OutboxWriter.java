@@ -6,6 +6,7 @@ import com.vortex.messaging.envelope.EventEnvelopeJsonCodec;
 import com.vortex.messaging.kafka.KafkaTopics;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
@@ -18,6 +19,10 @@ import java.util.UUID;
 public class OutboxWriter {
     private final JdbcTemplate jdbc;
     private final EventEnvelopeJsonCodec codec;
+    @Value("${vortex.kafka.topics.workflow-events:vortex.workflow-events}")
+    private String workflowTopic;
+    @Value("${vortex.kafka.topics.equipment-commands:vortex.equipment-commands}")
+    private String commandTopic;
 
     public OutboxWriter(JdbcTemplate jdbc, EventEnvelopeJsonCodec codec) {
         this.jdbc = jdbc;
@@ -26,7 +31,8 @@ public class OutboxWriter {
 
     @Transactional
     public long append(EventEnvelope envelope) {
-        String topic = KafkaTopics.forJavaOutbox(envelope.eventType());
+        String selected = KafkaTopics.forJavaOutbox(envelope.eventType());
+        String topic = selected.equals(KafkaTopics.COMMANDS) ? commandTopic : workflowTopic;
         byte[] bytes = codec.serialize(envelope);
         long sequence = nextSequence(envelope);
         Timestamp createdAt = Timestamp.from(Instant.now());

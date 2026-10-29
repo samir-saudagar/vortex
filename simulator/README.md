@@ -65,4 +65,6 @@ with delay capped at 30 seconds. Malformed/unsupported commands get four attempt
 before quarantine; its publication must be acknowledged before the source commit.
 Expected movement failures are command results. See the root README for outbox
 and manual quarantine inspection/redrive procedures. Java domain report handling
-and bag/route/scanner workflows remain Phase 4.
+and bag/route/scanner workflows are implemented by the Phase 4 backend. Start the
+backend and simulator together to run the complete REST-to-final-scanner journey;
+the simulator still has no PostgreSQL access.

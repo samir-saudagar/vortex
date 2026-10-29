@@ -20,7 +20,7 @@ spring:
       auto-offset-reset: earliest
     listener:
       ack-mode: record
-      auto-startup: ${VORTEX_KAFKA_CONSUMERS_ENABLED:false}
+      auto-startup: ${VORTEX_KAFKA_CONSUMERS_ENABLED:true}
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/vortex?currentSchema=vortex}
     username: ${POSTGRES_USER:vortex}
@@ -48,6 +48,10 @@ management:
           include: livenessState
 
 vortex:
+  movement:
+    command-timeout: ${VORTEX_COMMAND_TIMEOUT:30s}
+    observation-timeout: ${VORTEX_OBSERVATION_TIMEOUT:30s}
+    sweep-interval-ms: ${VORTEX_TIMEOUT_SWEEP_INTERVAL_MS:1000}
   kafka:
     topics:
       workflow-events: vortex.workflow-events

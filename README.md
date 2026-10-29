@@ -7,8 +7,10 @@ and a separate Python equipment simulator. Phase 1 established local
 infrastructure and persistence. Phase 2 provides the deterministic domain core.
 Phase 3 adds the transactional outbox relay, Kafka consumer/deduplication boundary,
 quarantine recovery procedures, and the Python Kafka process with its durable
-command journal. Check-in and movement business workflows belong to Phase 4;
-the operations dashboard and STOMP integration belong to Phase 5.
+command journal. Phase 4 adds check-in REST, durable flight/routing/movement
+workflows, scanner validation, timeouts, PostgreSQL queries, and explicit retry.
+The operations dashboard and STOMP integration remain Phase 5.
+See [the Phase 4 review record](docs/PHASE4_RESULTS.md).
 
 ## Linux prerequisites
 
@@ -124,8 +126,9 @@ isolated database created in the running Compose PostgreSQL server:
 ```
 
 The database test script creates a uniquely named temporary database, verifies
-fresh Flyway initialization, seed consistency, repeated migrations, outbox atomicity,
-aggregate ordering/leases/requeue, and consumer commit/replay behavior,
+fresh Flyway initialization, seed consistency, repeated migrations, V4-to-V5 upgrade,
+outbox atomicity, aggregate ordering/leases/requeue, consumer commit/replay behavior,
+and Phase 4 REST/workflow/failure/recovery cases,
 then removes only that temporary database. It does not reset `vortex` or remove
 the named volume.
 
@@ -137,7 +140,8 @@ the managed Java client's produce/consume path:
 VORTEX_KAFKA_SMOKE_TEST=true KAFKA_BOOTSTRAP_SERVERS=localhost:9092 ./gradlew --no-daemon --rerun-tasks :backend:test --tests com.vortex.diagnostics.KafkaBrokerSmokeTest
 ```
 
-Run the Phase 3 PostgreSQL/Kafka suite with both Compose services running:
+Run the complete Phase 3–4 PostgreSQL/Kafka suite with both Compose services
+running and the documented Python environment installed:
 
 ```bash
 ./scripts/test-database.sh --with-kafka
@@ -147,20 +151,86 @@ The script forces test execution and removes only its own temporary database.
 Kafka tests create/reuse `vortex.phase3-test.workflow`, `.commands`, `.reports`,
 and `.quarantine` as diagnostic topics (three partitions, except quarantine has
 one; replication one; seven-day retention; 2 MiB source / 32 MiB quarantine
-capacity). They never delete topics or send test workflows to the application topics. Outages and the
+capacity). Phase 4's HTTP/outbox/Kafka/Python journey uses unique
+`vortex.phase4-test.<uuid>.*` topics and a temporary command journal. Offline
+workflow tests also assign diagnostic topics, and live test contexts close before
+other test classes run. The suite never deletes topics or sends test workflows
+to the application topics. Outages and the
 acknowledgement/DB-update crash are injected; tests keep the running dependencies
 available. Java poison tests exercise the actual 1/5/15-second backoff.
 
-Java listener containers remain disabled by default through
-`VORTEX_KAFKA_CONSUMERS_ENABLED=false`. Phase 3 supplies dispatch interfaces and
-transactional adapters; Phase 4 supplies the domain handlers. Enabling listeners
-without all required handlers fails startup so valid workflow messages cannot be
-consumed prematurely. RECORD acknowledgement and synchronous offset commits occur
+Java listener containers are enabled by default through
+`VORTEX_KAFKA_CONSUMERS_ENABLED=true`; all required Phase 4 domain handlers are
+installed. If reusing a Phase 3 `.env`, change its previous `false` value to `true`.
+Set this flag to false only for offline inspection. Startup still
+checks that the full handler set exists. RECORD acknowledgement and synchronous offset commits occur
 after the PostgreSQL transaction returns. Semantic handler outcomes can commit
 `REJECTED`; message failures get four attempts, then broker-acknowledged quarantine.
 Changing exception types does not reset the four-attempt message retry budget.
 PostgreSQL connection outages use a separate retry budget without quarantine,
 with health checks and a delay capped at 30 seconds after the initial retries.
+
+## Phase 4 REST journey
+
+Run the backend and Python simulator in separate terminals using the commands
+above/below. An accepted check-in starts asynchronous verification and routing:
+
+```bash
+curl --fail-with-body -X POST http://127.0.0.1:8080/api/bags/check-in \
+  -H 'Content-Type: application/json' -H 'Idempotency-Key: demo-phase4-001' \
+  -d '{"bagTag":"DEMO-PHASE4-001","flightId":"FL-204-2030-01-15"}'
+```
+
+Repeat the same key/body to replay the original 202 response, including its IDs.
+Use a new bag tag and key for a separate journey. Unknown/ineligible flights are
+accepted first, then become `FLIGHT_VERIFICATION_FAILED`. Identifiers contain
+1–128 ASCII letters/digits/dots/underscores/hyphens, starting with a letter/digit;
+idempotency keys contain 1–128 visible ASCII characters.
+
+Replace `<bagId>` with the accepted UUID:
+
+```bash
+curl --fail http://127.0.0.1:8080/api/bags/<bagId>
+curl --fail http://127.0.0.1:8080/api/bags/<bagId>/history
+curl --fail http://127.0.0.1:8080/api/bags/<bagId>/route
+curl --fail http://127.0.0.1:8080/api/bags/<bagId>/movement
+curl --fail 'http://127.0.0.1:8080/api/flights?date=2030-01-15&origin=JFK'
+curl --fail http://127.0.0.1:8080/api/equipment
+curl --fail http://127.0.0.1:8080/api/equipment/belt-west
+```
+
+The movement endpoint exposes durable command, observation, and route-progress
+records. Rejected observations with unknown references are retained in history,
+where their diagnostic payload can be read without violating business foreign keys.
+All queries read PostgreSQL. A route is 404 before planning; a failed route
+decision is a queryable `BLOCKED` route with its exclusions and failure summary.
+History uses a durable sequence to order records created in the same transaction.
+
+After correcting a failed stage's cause in the local catalog/equipment configuration:
+
+```bash
+curl --fail-with-body -X POST http://127.0.0.1:8080/api/bags/<bagId>/retry \
+  -H 'Content-Type: application/json' -H 'Idempotency-Key: demo-retry-001' -d '{}'
+```
+
+Retry is asynchronous and idempotent. Flight failure repeats verification; routing
+failure repeats planning; movement failure supersedes the old execution and plans
+from the last scanner-confirmed node. A second pending retry is 409. Completed or
+healthy journeys are not retryable. No uncertain command is automatically replayed.
+
+`VORTEX_COMMAND_TIMEOUT` and `VORTEX_OBSERVATION_TIMEOUT` each default to `30s`.
+The first deadline starts at command issue and never resets on ACCEPTED/STARTED.
+The second starts when SUCCEEDED is accepted. A persistent deadline sweep runs
+every `VORTEX_TIMEOUT_SWEEP_INTERVAL_MS` (default 1000); handlers also check deadlines
+under the same bag lock, so a late report cannot beat the next sweep. Restarting
+the backend resumes deadline checks from PostgreSQL.
+
+OpenAPI JSON is at `/v3/api-docs`, with Swagger UI at `/swagger-ui.html`.
+The added `springdoc-openapi` pin is 2.10.0, whose
+[official release](https://github.com/springdoc/springdoc-openapi/releases/tag/v2.10.0)
+targets Spring Boot 3.5.16. The approved Boot-managed Kafka/JDBC/Flyway versions
+are unchanged. REST CORS allows `http://localhost:5173` by default; override
+`VORTEX_CORS_ORIGIN` for another local origin. STOMP is not implemented in Phase 4.
 
 ## Frontend foundation and simulator core
 
@@ -292,7 +362,7 @@ you need to preserve local demo records.
 ## Scope
 
 The six approved architecture documents in `docs/` define module ownership,
-event contracts, persistence, and the phased implementation sequence. Phase 3 is
-messaging and simulator infrastructure. Check-in REST, persisted flight/routing/
-movement workflows, scanner acceptance, timeouts, and retry use cases remain Phase 4;
-frontend and STOMP integration remain Phase 5. No Phase 4 business handler is installed.
+event contracts, persistence, and the phased implementation sequence. Phase 4 is
+implemented and stops at the backend workflow. React operations views, STOMP
+publication/subscriptions, and browser reconnect/resync remain Phase 5. No Phase 5
+implementation is included.

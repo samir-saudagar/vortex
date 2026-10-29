@@ -142,6 +142,8 @@ Tests:
 - Failure tests for unknown/ineligible flight, no route, rejected/uncertain command, 30-second command and observation timeouts, and explicit retry/replan without movement replay.
 - Replayed final observation test verifies one AT_MAKEUP transition/history row.
 
+Phase 4 verification record (2026-10-29): implemented the transactional check-in REST API, persisted flight/routing/movement workflow, PostgreSQL queries, guarded scanner acceptance, configurable 30-second command/observation deadlines, and explicit idempotent retry/replanning. The packaged backend build with the opt-in Java broker smoke test passed 57 checks; 42 gated entries were skipped there and exercised separately in the enabled integration suite. The final isolated PostgreSQL/Kafka suite passed all 59 checks with no failures or skips, including 33 Phase 4 workflow cases, the live HTTP/outbox/Kafka/Python journey and final replay, all nine startup equipment reports, V4-to-V5 upgrade, and the existing Phase 1–3 regressions. Python 3.13.16 passed all 50 simulator checks with its Kafka contract enabled. The existing frontend typecheck/build passed. Fixed a cross-language timestamp precision defect and test-context isolation; the guarded cleanup of this run's synthetic application-topic traffic is documented in [PHASE4_RESULTS.md](PHASE4_RESULTS.md), together with acceptance evidence and remaining limitations. Existing application database rows and V1–V4 migrations were preserved. No Phase 5 UI/STOMP work was implemented; changes stop for review.
+
 ### Phase 5 — React operations UI and STOMP
 
 Deliverables:

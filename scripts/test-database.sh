@@ -6,13 +6,16 @@ cd "$ROOT_DIR"
 
 phase3_kafka=false
 test_selectors=(--tests com.vortex.persistence.PersistenceFoundationIntegrationTest
-  --tests com.vortex.messaging.Phase3PersistenceIntegrationTest)
+  --tests com.vortex.messaging.Phase3PersistenceIntegrationTest
+  --tests com.vortex.workflow.Phase4WorkflowIntegrationTest
+  --tests com.vortex.workflow.Phase4MigrationIntegrationTest)
 case "${1:-}" in
   '') ;;
   --with-kafka)
     phase3_kafka=true
     test_selectors+=(--tests com.vortex.messaging.Phase3KafkaIntegrationTest
-      --tests com.vortex.persistence.KafkaTopicPolicyIntegrationTest)
+      --tests com.vortex.persistence.KafkaTopicPolicyIntegrationTest
+      --tests com.vortex.workflow.Phase4KafkaIntegrationTest)
     ;;
   *) printf 'Usage: %s [--with-kafka]\n' "$0" >&2; exit 2 ;;
 esac
@@ -41,4 +44,5 @@ POSTGRES_PASSWORD="$db_password" \
 VORTEX_DB_INTEGRATION_TEST=true \
 VORTEX_PHASE3_KAFKA_TEST="$phase3_kafka" \
 VORTEX_KAFKA_INTEGRATION_TEST="$phase3_kafka" \
+VORTEX_PHASE4_KAFKA_TEST="$phase3_kafka" \
   ./gradlew --no-daemon --rerun-tasks :backend:test "${test_selectors[@]}"

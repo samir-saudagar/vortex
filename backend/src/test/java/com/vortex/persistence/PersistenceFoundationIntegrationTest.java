@@ -24,7 +24,7 @@ class PersistenceFoundationIntegrationTest {
     void migrationsAreRepeatableOnAnAlreadyMigratedDatabase() {
         flyway.migrate();
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(4, jdbc.queryForObject(
+        assertEquals(5, jdbc.queryForObject(
                 "select count(*) from vortex.flyway_schema_history where success = true and version is not null",
                 Integer.class));
     }
