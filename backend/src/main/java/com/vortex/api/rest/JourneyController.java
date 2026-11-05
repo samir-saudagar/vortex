@@ -39,6 +39,25 @@ public class JourneyController {
     public ResponseEntity<CheckInUseCase.Accepted> checkin(@RequestHeader("Idempotency-Key") String key, @RequestBody CheckInUseCase.Request body) {
         return ResponseEntity.accepted().body(checkin.checkIn(key, body));
     }
+    @GetMapping("/bags")
+    public BagPage list(@RequestParam(defaultValue = "") String search,
+                        @RequestParam(required = false) String state,
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "25") int size) {
+        if (search.length() > 128 || page < 0 || size < 1 || size > 100) throw new IllegalArgumentException("Use a search up to 128 characters, page >= 0, and size 1–100");
+        if (state != null) com.vortex.bagstate.domain.BagState.valueOf(state);
+        var result = bags.list(search.trim(), state, page, size);
+        return new BagPage(result.items().stream().map(b -> {
+            var route = routes.latest(b.bagId()).filter(r -> r.routeId().equals(b.routeId())).orElse(null);
+            int completed = route == null ? 0 : route.steps().stream().filter(s -> s.toNodeId().equals(b.confirmedNodeId())).mapToInt(s -> s.stepNo()).max().orElse(0);
+            return new BagListItem(BagView.of(b), route == null ? null : route.destinationNodeId(), completed, route == null ? 0 : route.steps().size());
+        }).toList(), result.total(), page, size);
+    }
+    @GetMapping("/bags/summary")
+    public BagQuery.Summary summary() { return bags.summary(); }
+    public record BagPage(List<BagListItem> items, long total, int page, int size) { }
+    public record BagListItem(BagView bag, String destinationNodeId, int confirmedSteps, int totalSteps) { }
+
     @GetMapping("/bags/{id}")
     public BagView bag(@PathVariable UUID id) { return BagView.of(requireBag(id)); }
     @GetMapping("/bags/{id}/history")

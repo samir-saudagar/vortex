@@ -60,6 +60,7 @@ vortex:
       quarantine: vortex.quarantine
     groups:
       workflow: vortex-workflow
+      ui: vortex-ui
       simulator-reports: vortex-java-simulator-reports
   outbox:
     poll-interval-ms: ${VORTEX_OUTBOX_POLL_INTERVAL_MS:500}

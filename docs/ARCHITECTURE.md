@@ -175,9 +175,12 @@ The browser never connects to Kafka or PostgreSQL. Kafka contracts are in EVENT_
 | Endpoint | Purpose | Main result |
 |---|---|---|
 | POST /api/bags/check-in | Accept check-in; requires Idempotency-Key and JSON bagTag/flightId | 202 with bagId, correlationId, CHECKED_IN, status/history URLs; 400 malformed input; 409 duplicate bagTag or idempotency key reused with another body |
+| GET /api/bags | Paginated read-only operations list; optional search/state, page and size | 200 page of bag/route summaries; 400 invalid filters |
+| GET /api/bags/summary | Unfiltered persisted operations counts | 200 total, active, completed, failed |
 | GET /api/bags/{bagId} | Current authoritative bag projection | 200 current state and confirmed node; 404 unknown bag |
 | GET /api/bags/{bagId}/history | Ordered state and observation decision timeline | 200 list; 404 unknown bag |
 | GET /api/bags/{bagId}/route | Current/latest persisted route and steps | 200 route; 404 unknown bag or no route yet |
+| GET /api/bags/{bagId}/movement | Existing Phase 4 command, observation and progress diagnostics | 200; snake_case diagnostic keys; 404 unknown bag |
 | GET /api/flights?date=...&origin=... | Local flight lookup for UI selection | 200 list; 400 invalid filters |
 | GET /api/equipment | Current equipment status | 200 list |
 | GET /api/equipment/{equipmentId} | One equipment status and last update time | 200; 404 unknown equipment |
@@ -200,6 +203,26 @@ Common errors use { "code": "STABLE_ERROR_CODE", "message": "Safe user-facing te
 Retry behavior is state-dependent: FLIGHT_VERIFICATION_FAILED repeats flight verification; ROUTING_BLOCKED retries planning from the last confirmed node; MOVEMENT_FAILED replans from the last confirmed scanner node using current equipment availability. The prior route/commands remain in history. Reject retries when the bag is not in a failure state. A retry is idempotent by header key. There is no general catalog-editing API in the first version; a developer/operator corrects seeded local data or equipment configuration before retry.
 
 STOMP endpoint: /ws. UI subscribes to /topic/bags/{bagId} for bag state and journey updates and /topic/equipment for equipment status. Payloads include eventId, eventType, eventVersion, occurredAt, correlationId, bagId/equipmentId, current state/status, confirmed node when applicable, and a history/event reference. Notifications are best-effort views of committed events, not durable history. Reconnect logic must refetch the bag, route, and history through REST before trusting the live stream.
+
+Phase 5 implements this native STOMP endpoint and forwards the existing full
+version-1 event envelope unchanged. The independent UI Kafka group defaults to
+`vortex-ui`; only `BagStateChanged` and `EquipmentStatusChanged` are broadcast.
+Clients cannot publish to broker topics. Heartbeats detect lost connections.
+The browser uses events as REST invalidations, with event ID/version guards,
+serialized refreshes, subscription cleanup and REST resync on reconnect. A
+10-second REST refresh discovers new/off-page bags and command/observation-only
+diagnostics without inventing a global topic or new workflow event.
+
+Phase 5 list response: `{items: [{bag: <existing BagView>, destinationNodeId,
+confirmedSteps, totalSteps}], total, page, size}`. `search` is a case-insensitive
+literal substring of bag tag, flight identifier or bag UUID (max 128 characters).
+`state` is one implemented bag state; omitted means all. Page is zero-based;
+size defaults to 25 and must be 1–100. Ordering is updatedAt descending, then bag
+UUID. `confirmedSteps` uses the canonical confirmed node within the current route,
+never command status. Summary is `{total, active, completed, failed}` over all
+bags; completed means AT_MAKEUP; failed means FLIGHT_VERIFICATION_FAILED,
+ROUTING_BLOCKED or MOVEMENT_FAILED; active is the remainder. List filtering does
+not change these global counts.
 
 ## Bag state model
 
@@ -291,7 +314,7 @@ Compose contains only PostgreSQL 17.11 and single-node Kafka 4.3.1 in combined b
 | PostgreSQL | 5432 | postgres:5432 |
 | Kafka | 9092 | Host: localhost:9092; Compose clients: kafka:29092 |
 | Spring Boot REST, OpenAPI, STOMP | 8080 | Host process |
-| React dev server | 5173 | Host process; CORS allowlist is http://localhost:5173 |
+| React dev server | 5173 | Host process; REST/STOMP allow http://localhost:5173 and http://127.0.0.1:5173 |
 | Python simulator | none required | Host process |
 
 Proposed developer commands after implementation: start dependencies with docker compose up -d postgres kafka; run Java with ./gradlew :backend:bootRun; run UI with npm --prefix frontend run dev; run simulator in its virtual environment with python -m vortex_simulator.main from simulator; run tests with ./gradlew :backend:test, npm --prefix frontend test, and python -m pytest simulator/tests. Inspect dependencies with docker compose ps and docker compose logs -f postgres kafka. Inspect topics with docker compose exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list and inspect records with the matching kafka-console-consumer.sh command. Stop dependencies with docker compose stop. A destructive docker compose down -v or reset script is explicitly for local demo data only.

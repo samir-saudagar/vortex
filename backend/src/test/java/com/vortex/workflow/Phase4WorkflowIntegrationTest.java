@@ -127,6 +127,33 @@ class Phase4WorkflowIntegrationTest {
         return jdbc.queryForObject("SELECT count(*) FROM vortex.bag_history WHERE bag_id = ? AND current_state = ? AND record_type = 'STATE_TRANSITION'", Long.class, id, state);
     }
 
+    @Test void operationsReadsArePaginatedSearchableAndScannerConfirmed() throws Exception {
+        var baseline = bags.summary();
+        UUID id = startedBag();
+        UUID failed = checkin("UNKNOWN-PHASE5").bagId(); drain(failed);
+        var summary = bags.summary();
+        assertEquals(baseline.total() + 2, summary.total());
+        assertEquals(baseline.active() + 1, summary.active());
+        assertEquals(baseline.failed() + 1, summary.failed());
+        var current = command(id); succeed(current);
+        mvc.perform(get("/api/bags").param("search", id.toString())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.items[0].confirmedSteps").value(0))
+                .andExpect(jsonPath("$.items[0].bag.confirmedNodeId").value("checkin-main"));
+        receive(observation(current));
+        mvc.perform(get("/api/bags").param("search", id.toString())).andExpect(jsonPath("$.items[0].confirmedSteps").value(1));
+        current = command(id); succeed(current); receive(observation(current));
+        mvc.perform(get("/api/bags").param("search", bag(id).bagTag().toLowerCase()).param("state", "AT_MAKEUP"))
+                .andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.items[0].destinationNodeId").value("makeup-lhr"))
+                .andExpect(jsonPath("$.items[0].confirmedSteps").value(2));
+        mvc.perform(get("/api/bags").param("search", failed.toString()).param("state", "FLIGHT_VERIFICATION_FAILED"))
+                .andExpect(jsonPath("$.items[0].bag.failureCode").value("UNKNOWN_FLIGHT"));
+        assertTrue(bags.list("%", null, 0, 25).items().isEmpty(), "Wildcards must be literal search text");
+        var first = bags.list("P4-", null, 0, 1); var second = bags.list("P4-", null, 1, 1);
+        assertNotEquals(first.items().getFirst().bagId(), second.items().getFirst().bagId());
+        assertEquals(first.total(), second.total());
+        assertEquals(baseline.completed() + 1, bags.summary().completed());
+    }
+
     @Test void durableAcceptanceAndConcurrentIdempotencyAreAtomic() throws Exception {
         String key = UUID.randomUUID().toString();
         var request = new CheckInUseCase.Request("P4-" + UUID.randomUUID(), FLIGHT);

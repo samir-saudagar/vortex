@@ -1,6 +1,8 @@
 package com.vortex.bagstate.persistence;
 
 import com.vortex.bagstate.api.BagQuery.HistoryItem;
+import com.vortex.bagstate.api.BagQuery.Page;
+import com.vortex.bagstate.api.BagQuery.Summary;
 import com.vortex.bagstate.api.BagSnapshot;
 import com.vortex.bagstate.domain.BagState;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,6 +34,28 @@ public class JdbcBagRepository {
 
     public boolean tagExists(String tag) {
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM vortex.bags WHERE bag_tag = ?)", Boolean.class, tag));
+    }
+
+    public Page list(String search, String state, int page, int size) {
+        // Literal substring matching: SQL wildcard characters have no special meaning.
+        String where = " WHERE (strpos(lower(bag_tag), lower(?)) > 0 OR strpos(lower(flight_id), lower(?)) > 0 OR strpos(bag_id::text, lower(?)) > 0)";
+        var args = new java.util.ArrayList<Object>(List.of(search, search, search));
+        if (state != null) { where += " AND current_state = ?"; args.add(state); }
+        long total = jdbc.queryForObject("SELECT count(*) FROM vortex.bags" + where, Long.class, args.toArray());
+        args.add(size); args.add((long) page * size);
+        var items = jdbc.query("SELECT * FROM vortex.bags" + where + " ORDER BY updated_at DESC, bag_id LIMIT ? OFFSET ?",
+                (rs, n) -> map(rs), args.toArray());
+        return new Page(items, total, page, size);
+    }
+
+    public Summary summary() {
+        return jdbc.queryForObject("""
+                SELECT count(*) AS total,
+                  count(*) FILTER (WHERE current_state = 'AT_MAKEUP') AS completed,
+                  count(*) FILTER (WHERE current_state IN ('FLIGHT_VERIFICATION_FAILED', 'ROUTING_BLOCKED', 'MOVEMENT_FAILED')) AS failed
+                FROM vortex.bags
+                """, (rs, n) -> new Summary(rs.getLong("total"), rs.getLong("total") - rs.getLong("completed") - rs.getLong("failed"),
+                rs.getLong("completed"), rs.getLong("failed")));
     }
 
     private BagSnapshot map(ResultSet rs) throws SQLException {

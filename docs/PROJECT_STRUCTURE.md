@@ -173,3 +173,16 @@ The docs folder contains the six architecture documents created before implement
 ## Keep the tree proportional
 
 Do not create modules for every table or event. Do not add an admin frontend, generated clients, SDK, shared contracts repository, Kubernetes manifests, or production deployment folders until a concrete need exists. The simulator is a separate process because that separation is explicitly part of the product; the Java domains remain one deployable application.
+
+## Phase 5 implementation locations
+
+`frontend/src/api/client.ts` centralizes REST; `types/contracts.ts` mirrors the
+existing contracts, including snake_case movement diagnostics. `app/useOperations.ts`
+coordinates bounded REST reads and lifecycle cleanup. `realtime/feed.ts` owns STOMP,
+deduplication and reconnect/resync; `features/bags` owns details and route progress;
+`features/checkin` owns check-in; `components/Status.tsx` shares status/time/error
+presentation. Vitest/Testing Library tests live in `frontend/tests`.
+`backend/.../api/websocket` supplies the documented STOMP configuration and committed
+Kafka-to-STOMP adapter. Existing API/application/repository classes add only read
+projections. The existing Phase 4 Kafka integration journey now also tests a real
+STOMP subscription against a committed final-state envelope.

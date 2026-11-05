@@ -33,6 +33,11 @@ public class PersistentBagLifecycle implements BagLifecycle, BagQuery {
     public boolean tagExists(String tag) { return repository.tagExists(tag); }
     public List<HistoryItem> history(UUID id) { return repository.history(id); }
 
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public Page list(String search, String state, int page, int size) { return repository.list(search, state, page, size); }
+    @Transactional(readOnly = true)
+    public Summary summary() { return repository.summary(); }
+
     public BagSnapshot create(UUID id, String tag, String flight, String node, UUID correlation, UUID root) {
         Timestamp now = Timestamp.from(clock.instant());
         jdbc.update("""

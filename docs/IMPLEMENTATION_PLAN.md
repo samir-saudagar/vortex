@@ -161,6 +161,26 @@ Tests:
 - WebSocket update mapping integration test where practical.
 - Browser smoke test for check-in, live progress, disconnect/refetch, and final state display.
 
+Phase 5 implementation record (2026-11-05): React operations metrics, searchable/
+paginated baggage, scanner-confirmed route/detail/timeline diagnostics, check-in/
+flight selection, equipment, failure details and explicitly confirmed guarded retry
+are implemented. Added only the two missing read endpoints (bag list and summary)
+and the documented native `/ws` STOMP adapter. An independent UI consumer forwards
+existing committed state/equipment envelopes without changing event contracts.
+Visible/selected subscriptions, dedup/version guards, serialized REST invalidation,
+reconnect resync/cleanup and 10-second diagnostic/list refresh are implemented.
+Frontend typecheck/build passed and all 20 component/client/lifecycle tests passed.
+The packaged backend build with broker smoke passed 60 checks (43 gated entries
+skipped there); the enabled isolated PostgreSQL/Kafka suite passed all 60 checks
+with no skips, including the existing Phase 4 journey and real Kafka-to-STOMP
+mapping. All 50 simulator tests passed with its live Kafka contract enabled.
+Interactive browser/visual/mobile smoke remains unexecuted because the browser
+access host was unavailable; component and actual STOMP tests do not replace it.
+Frontend checks used the available Node 24.19.0; the documented Node 22.23.3 baseline
+was not rerun. Existing application baggage counts were preserved. No Phase 6
+features or new architecture were introduced. Full file/API manifest, exact commands,
+manual verification and limitations: [PHASE5_RESULTS.md](PHASE5_RESULTS.md).
+
 ### Phase 6 — Deterministic end-to-end and recovery review
 
 Deliverables:

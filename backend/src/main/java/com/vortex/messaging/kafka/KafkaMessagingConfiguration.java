@@ -48,7 +48,7 @@ public class KafkaMessagingConfiguration {
         return new EventEnvelopeJsonCodec(mapper, validator);
     }
 
-    @Bean
+    @Bean(name = {"vortexTaskScheduler", "taskScheduler"})
     TaskScheduler vortexTaskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(2);
@@ -58,7 +58,7 @@ public class KafkaMessagingConfiguration {
 
     @Bean
     ListenerContainerPauseService listenerContainerPauseService(ListenerContainerRegistry registry,
-                                                                 TaskScheduler scheduler) {
+                                                                 @org.springframework.beans.factory.annotation.Qualifier("vortexTaskScheduler") TaskScheduler scheduler) {
         return new ListenerContainerPauseService(registry, scheduler);
     }
 

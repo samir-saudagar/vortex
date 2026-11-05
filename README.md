@@ -9,7 +9,8 @@ Phase 3 adds the transactional outbox relay, Kafka consumer/deduplication bounda
 quarantine recovery procedures, and the Python Kafka process with its durable
 command journal. Phase 4 adds check-in REST, durable flight/routing/movement
 workflows, scanner validation, timeouts, PostgreSQL queries, and explicit retry.
-The operations dashboard and STOMP integration remain Phase 5.
+Phase 5 adds the React operations dashboard and committed STOMP notifications.
+See [the Phase 5 implementation report](docs/PHASE5_RESULTS.md).
 See [the Phase 4 review record](docs/PHASE4_RESULTS.md).
 
 ## Linux prerequisites
@@ -141,7 +142,9 @@ VORTEX_KAFKA_SMOKE_TEST=true KAFKA_BOOTSTRAP_SERVERS=localhost:9092 ./gradlew --
 ```
 
 Run the complete Phase 3–4 PostgreSQL/Kafka suite with both Compose services
-running and the documented Python environment installed:
+running, the documented Python environment installed, and frontend dependencies
+installed with `npm --prefix frontend ci` (the live regression starts a temporary
+Vite proxy against its isolated Spring server):
 
 ```bash
 ./scripts/test-database.sh --with-kafka
@@ -229,10 +232,13 @@ OpenAPI JSON is at `/v3/api-docs`, with Swagger UI at `/swagger-ui.html`.
 The added `springdoc-openapi` pin is 2.10.0, whose
 [official release](https://github.com/springdoc/springdoc-openapi/releases/tag/v2.10.0)
 targets Spring Boot 3.5.16. The approved Boot-managed Kafka/JDBC/Flyway versions
-are unchanged. REST CORS allows `http://localhost:5173` by default; override
-`VORTEX_CORS_ORIGIN` for another local origin. STOMP is not implemented in Phase 4.
+are unchanged. REST CORS and the native `/ws` STOMP endpoint both allow the exact
+local origins `http://localhost:5173` and `http://127.0.0.1:5173`. Existing
+`VORTEX_CORS_ORIGIN` and `VORTEX_STOMP_ORIGIN` settings can add comma-separated
+exact origins; they do not remove the two required local origins. Wildcards are
+rejected. Methods remain GET/POST, with Content-Type and Idempotency-Key headers.
 
-## Frontend foundation and simulator core
+## Operations dashboard and simulator
 
 Install and run the frontend:
 
@@ -242,7 +248,36 @@ npm --prefix frontend run typecheck
 npm --prefix frontend run dev
 ```
 
-The frontend development server binds to `127.0.0.1:5173`.
+Open **http://localhost:5173** or **http://127.0.0.1:5173** (the server binds
+to `127.0.0.1:5173`). Vite proxies `/api` and `/ws` to the backend at
+`127.0.0.1:8080`, rewriting Host while preserving the browser's Origin. Do not
+strip Origin or enable WebSocket Origin rewriting to bypass Spring's allowlists.
+If using another explicit local origin, add it to both `VORTEX_CORS_ORIGIN` and
+`VORTEX_STOMP_ORIGIN` when starting the backend. Restart Spring Boot and Vite
+after changing configuration; already-running processes retain the old settings. If changing its port, update
+`frontend/vite.config.ts`'s proxy target too.
+
+The dashboard reads real summary counts, paginated/searchable baggage, routes,
+commands, scanner observations, history, flights and equipment. Select a bag tag
+for details. Check-in uses the existing idempotent API; **Review recovery** opens
+an explicit confirmation before calling the existing retry endpoint.
+
+STOMP subscribes to `/topic/bags/{bagId}` for visible/selected bags and
+`/topic/equipment`. Notifications invalidate REST projections; they never invent
+location. Reconnect subscribes and refetches authoritative state before reporting
+live status. REST also refreshes every 10 seconds to discover new/off-page bags
+and diagnostics that do not produce a state event. All timestamps display UTC.
+
+```bash
+npm --prefix frontend test
+npm --prefix frontend run typecheck
+npm --prefix frontend run build
+curl --fail 'http://127.0.0.1:8080/api/bags?page=0&size=25'
+curl --fail http://127.0.0.1:8080/api/bags/summary
+```
+
+For manual checks using existing records and exact startup commands, see
+[PHASE5_RESULTS.md](docs/PHASE5_RESULTS.md).
 
 Set up the Python 3.13 project environment and run the Kafka simulator:
 
@@ -362,7 +397,7 @@ you need to preserve local demo records.
 ## Scope
 
 The six approved architecture documents in `docs/` define module ownership,
-event contracts, persistence, and the phased implementation sequence. Phase 4 is
-implemented and stops at the backend workflow. React operations views, STOMP
-publication/subscriptions, and browser reconnect/resync remain Phase 5. No Phase 5
-implementation is included.
+event contracts, persistence, and the phased implementation sequence. Phases 4
+and 5 are implemented. Phase 6's broader recovery harness and future integrations
+remain deferred. No authentication, catalog editor, topology editor or new
+hardware/failure mechanisms have been added.

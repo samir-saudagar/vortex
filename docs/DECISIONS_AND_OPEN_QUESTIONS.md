@@ -67,3 +67,15 @@ No architecture approval is pending. The exact version pins below are recommende
 - User authentication, roles, multi-tenant baggage handling, and public deployment.
 - Network/flight administration UI, topology hot reload, alternate retry strategies, and bag cancellation.
 - Advanced event sourcing; PostgreSQL remains authoritative and the history is an append-only timeline, not a replay-only system.
+
+## Phase 5 implementation notes
+
+No architecture decision changed. Inspection confirmed that Phase 4 supplied the
+journey APIs and guarded retry, while its frontend and documented STOMP endpoints
+were deliberately deferred. Phase 5 implements that adapter and two missing read
+endpoints (paginated list and summary). Existing full event envelopes are reused
+as invalidation hints. Visible/selected bag subscriptions plus 10-second REST
+refresh cover the overview without adding a new topic. Retry requires operator
+confirmation and retains its idempotency key across uncertain HTTP failures;
+a positively acknowledged request ends that attempt, allowing a later explicitly
+confirmed retry even if a blocked state's version remains unchanged.

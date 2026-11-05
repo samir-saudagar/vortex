@@ -230,3 +230,17 @@ For Kafka-to-PostgreSQL consumers, processed-event insertion, domain updates, hi
 6. O1 matches route R, step 1, C1, equipment, expected node, scanner, and active bag. It is accepted; history records AT_INTERMEDIATE_NODE and Movement queues command C2 in the same transaction.
 7. Repeat for each checkpoint. The final observation must match R's last step, destination-mapped makeup node, and configured final scanner. Its transaction changes state to AT_MAKEUP, marks route complete, writes history, and inserts BagStateChanged into the outbox.
 8. The UI consumer publishes the committed state notification. A duplicate O1 or final observation is a no-op and cannot add a second transition.
+
+## Phase 5 browser adapter
+
+The implemented UI consumer uses the configured workflow topic and an independent
+`vortex.kafka.groups.ui` group (default `vortex-ui`). It validates the existing
+version-1 envelope/key and forwards its unchanged JSON wire envelope to
+`/topic/bags/{aggregateId}` for BagStateChanged or `/topic/equipment` for
+EquipmentStatusChanged. Other facts are ignored. No event type/version/topic was
+added. The simple STOMP broker is ephemeral; the listener returns after the send
+attempt, using the existing Kafka acknowledgement/error handling policy. It does
+not create business processed_events rows. REST remains the resync mechanism.
+The browser rejects duplicate IDs and non-increasing bag state versions, then
+refetches REST instead of applying partial event payloads to bag projections.
+Command-only and rejected-observation changes are covered by REST refresh.

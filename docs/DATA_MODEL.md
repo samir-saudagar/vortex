@@ -214,3 +214,14 @@ The cross-module APIs convey IDs and immutable snapshots. Do not have another mo
 ## Migration strategy for the new project
 
 Create Flyway migrations starting from an empty PostgreSQL database. First migration creates the schema, enum/check constraints, tables, keys, and indexes in dependency order; create the bag-to-route/command foreign keys after those target tables and mark the circular references DEFERRABLE INITIALLY DEFERRED. Follow with a separate seed migration or idempotent local seed task for flights, network version/nodes/edges, and equipment. Further migrations are append-only versioned files; do not edit a migration after it has been applied to a developer database. Test migrations both on an empty database and against the previous new-project migration version. No old schema or data is assumed.
+
+## Phase 5 read projections
+
+No schema migration is required. BagQuery's bounded list and aggregate summary
+read the existing bags table in its owning module. Page count and rows use a
+read-only repeatable-read transaction; route summaries are composed through
+RouteQuery at the REST boundary. Substring filters are parameterized and treat
+SQL wildcard characters literally. Existing state/update-time indexes and unique
+bag tags are retained. No new write path or Kafka-backed query projection exists.
+History and movement diagnostics retain the Phase 4 full-journey reads; pagination
+of those long-lived diagnostics is still deferred until the local demo grows.
