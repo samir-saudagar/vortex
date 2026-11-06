@@ -13,7 +13,10 @@ Phase 5 adds the React operations dashboard and committed STOMP notifications.
 See [the Phase 5 implementation report](docs/PHASE5_RESULTS.md).
 See [the Phase 4 review record](docs/PHASE4_RESULTS.md).
 
-## Linux prerequisites
+For the Docker-only workflow on Linux, Windows or macOS, skip to
+[Run VORTEX with Docker](#run-vortex-with-docker).
+
+## Linux host-development prerequisites
 
 - Eclipse Temurin JDK 21.0.12.1+1 (or another compatible Java 21 JDK)
 - Gradle 8.14.6 through the checked-in wrapper
@@ -29,6 +32,47 @@ named `postgres-data` volume. Spring Boot 3.5.16 manages Spring Kafka 3.3.16,
 Kafka client 3.9.2, and the PostgreSQL JDBC driver; Flyway core and its
 PostgreSQL module are managed at 11.7.2. VORTEX does not override these managed
 versions.
+
+## Run VORTEX with Docker
+
+The single `compose.yaml` builds and runs Java, React/Nginx and Python alongside
+PostgreSQL and Kafka when the `full` profile is enabled. It requires Docker with
+Compose and Linux containers; Java, Gradle, Node, npm, Python and uv are not
+required on the host.
+
+**Existing installations:** read the
+[Kafka storage migration note](docs/DOCKER_DEPLOYMENT.md#existing-development-data-before-first-recreation)
+before the first `up` that recreates the old broker. A new clone with empty
+volumes needs no migration.
+
+```bash
+git clone https://github.com/samir-saudagar/vortex.git
+cd vortex
+docker compose --profile full up --build -d
+```
+
+Open **http://localhost:8088** when the services are healthy. Initial downloads,
+image builds and topic initialization can take several minutes.
+
+```bash
+docker compose --profile full ps --all
+docker compose --profile full logs -f --tail=100
+docker compose --profile full stop
+```
+
+Without a profile, `docker compose up -d` starts **only PostgreSQL and Kafka**.
+Their host-development ports remain `127.0.0.1:5432` and `127.0.0.1:9092`;
+full mode also publishes the frontend on `127.0.0.1:8088`. Profiles share the
+chosen project's data. Use another project name and unused ports for isolation.
+The IntelliJ/Vite/host-simulator workflow below remains supported.
+
+Do not run host and container simulators together or replace an existing command
+journal with an empty one when switching modes. The migration guide covers
+preserving existing state before adopting containerized storage.
+See [Docker deployment](docs/DOCKER_DEPLOYMENT.md) for platform/architecture limits,
+configuration, restart/rebuild, confirmed reset and automated acceptance evidence;
+see [blocked-belt verification](docs/BLOCKED_BELT_TEST.md) for the real graph and
+isolated failure/recovery scenarios. This remains an educational local demo.
 
 ## Local configuration
 
@@ -193,10 +237,10 @@ idempotency keys contain 1–128 visible ASCII characters.
 Replace `<bagId>` with the accepted UUID:
 
 ```bash
-curl --fail http://127.0.0.1:8080/api/bags/<bagId>
-curl --fail http://127.0.0.1:8080/api/bags/<bagId>/history
-curl --fail http://127.0.0.1:8080/api/bags/<bagId>/route
-curl --fail http://127.0.0.1:8080/api/bags/<bagId>/movement
+curl --fail 'http://127.0.0.1:8080/api/bags/<bagId>'
+curl --fail 'http://127.0.0.1:8080/api/bags/<bagId>/history'
+curl --fail 'http://127.0.0.1:8080/api/bags/<bagId>/route'
+curl --fail 'http://127.0.0.1:8080/api/bags/<bagId>/movement'
 curl --fail 'http://127.0.0.1:8080/api/flights?date=2030-01-15&origin=JFK'
 curl --fail http://127.0.0.1:8080/api/equipment
 curl --fail http://127.0.0.1:8080/api/equipment/belt-west
@@ -212,7 +256,7 @@ History uses a durable sequence to order records created in the same transaction
 After correcting a failed stage's cause in the local catalog/equipment configuration:
 
 ```bash
-curl --fail-with-body -X POST http://127.0.0.1:8080/api/bags/<bagId>/retry \
+curl --fail-with-body -X POST 'http://127.0.0.1:8080/api/bags/<bagId>/retry' \
   -H 'Content-Type: application/json' -H 'Idempotency-Key: demo-retry-001' -d '{}'
 ```
 
@@ -397,11 +441,12 @@ you need to preserve local demo records.
 ## Scope
 
 The six approved architecture documents in `docs/` define module ownership,
-event contracts, persistence, and the phased implementation sequence. Phases 4
-and 5 are implemented. Phase 6's reliability harness is implemented and verified;
-its tagged demo milestone remains pending user release action. Future integrations
-remain deferred. No authentication, catalog editor, topology editor or physical
-hardware integration has been added.
+event contracts, persistence, and the phased implementation sequence. Phases 4–6
+are implemented; the completed Phase 6 milestone is tagged `v0.6.0-phase6-demo`
+at `c08cbc2ddb549d94c75a9a956cd5c0173e33e832`. The separate full-stack Docker
+deployment is a post-milestone enhancement. Future integrations remain deferred.
+No authentication, catalog editor, topology editor or physical hardware integration
+has been added.
 
 ## Phase 6 reliability verification
 
