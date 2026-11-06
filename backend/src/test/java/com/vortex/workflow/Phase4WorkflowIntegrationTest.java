@@ -297,6 +297,57 @@ class Phase4WorkflowIntegrationTest {
         assertEquals(3, movement.commands(id).size());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"belt-west", "diverter-lhr"})
+    void phase6EquipmentFailureAtEitherEdgeRecoversFromLastScanner(String equipmentId) {
+        UUID id = startedBag();
+        var old = command(id);
+        if (equipmentId.equals("diverter-lhr")) {
+            succeed(old); receive(observation(old)); old = command(id);
+        }
+        assertEquals(equipmentId, old.payload().path("equipmentId").asText());
+        String confirmed = bag(id).confirmedNodeId();
+        long historyCount = bags.history(id).size();
+        receive(result(old, "FAILED"));
+        assertEquals(BagState.MOVEMENT_FAILED, bag(id).state());
+        assertEquals(confirmed, bag(id).confirmedNodeId());
+        String key = UUID.randomUUID().toString();
+        var accepted = retry.retry(id, key);
+        drain(id); // Acceptance is durable; replacement planning is asynchronous.
+        assertEquals(confirmed, routes.latest(id).orElseThrow().sourceNodeId());
+        assertNotEquals(old.payload().path("routeId").asText(), bag(id).routeId().toString());
+        for (int step = 0; step < 3 && bag(id).state() != BagState.AT_MAKEUP; step++) {
+            var next = command(id); succeed(next); receive(observation(next));
+        }
+        assertEquals(BagState.AT_MAKEUP, bag(id).state());
+        assertEquals(accepted, retry.retry(id, key));
+        assertTrue(bags.history(id).size() > historyCount);
+        assertEquals(1, transitions(id, "AT_MAKEUP"));
+    }
+
+    @Test void phase6MissingFinalScannerNeverFabricatesArrivalAndCanBeReplanned() {
+        UUID id = startedBag();
+        var first = command(id); succeed(first); receive(observation(first));
+        var last = command(id); succeed(last);
+        assertEquals("junction-west", bag(id).confirmedNodeId());
+        assertEquals(BagState.IN_TRANSIT, bag(id).state());
+        assertEquals(0, transitions(id, "AT_MAKEUP"));
+        clock.advance(30); timeouts.expire(id);
+        assertEquals(BagState.MOVEMENT_FAILED, bag(id).state());
+        assertEquals("OBSERVATION_TIMEOUT", bag(id).failureCode());
+        assertEquals("junction-west", bag(id).confirmedNodeId());
+        retry.retry(id, UUID.randomUUID().toString()); drain(id);
+        var replacement = command(id);
+        assertEquals("junction-west", replacement.payload().path("fromNodeId").asText());
+        // A delayed scan for the superseded successful command is diagnostic, not arrival.
+        receive(observation(last));
+        assertEquals("junction-west", bag(id).confirmedNodeId());
+        assertEquals(0, transitions(id, "AT_MAKEUP"));
+        succeed(replacement); receive(observation(replacement));
+        assertEquals(BagState.AT_MAKEUP, bag(id).state());
+        assertEquals(1, transitions(id, "AT_MAKEUP"));
+    }
+
     @Test void thirtySecondCommandDeadlineDoesNotResetOnAcknowledgementOrStart() {
         UUID id = startedBag(); EventEnvelope command = command(id);
         clock.advance(20); receive(result(command, "ACCEPTED"));

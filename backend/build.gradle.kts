@@ -40,6 +40,10 @@ tasks.test {
     inputs.property("vortexKafkaIntegrationEnabled", providers.environmentVariable("VORTEX_KAFKA_INTEGRATION_TEST").orElse("false"))
     inputs.property("vortexPhase3KafkaEnabled", providers.environmentVariable("VORTEX_PHASE3_KAFKA_TEST").orElse("false"))
     inputs.property("vortexPhase4KafkaEnabled", providers.environmentVariable("VORTEX_PHASE4_KAFKA_TEST").orElse("false"))
+    inputs.property("vortexPhase6Enabled", providers.environmentVariable("VORTEX_PHASE6_TEST").orElse("false"))
+    if (providers.environmentVariable("VORTEX_PHASE6_TEST").orNull == "true") {
+        systemProperty("vortex.test.classpath", sourceSets.test.get().runtimeClasspath.asPath)
+    }
     useJUnitPlatform()
     testLogging {
         events("passed", "skipped", "failed")

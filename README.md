@@ -398,6 +398,14 @@ you need to preserve local demo records.
 
 The six approved architecture documents in `docs/` define module ownership,
 event contracts, persistence, and the phased implementation sequence. Phases 4
-and 5 are implemented. Phase 6's broader recovery harness and future integrations
-remain deferred. No authentication, catalog editor, topology editor or new
-hardware/failure mechanisms have been added.
+and 5 are implemented. Phase 6's reliability harness is implemented and verified;
+its tagged demo milestone remains pending user release action. Future integrations
+remain deferred. No authentication, catalog editor, topology editor or physical
+hardware integration has been added.
+
+## Phase 6 reliability verification
+
+Run `./scripts/verify-phase6.sh` for serial frontend/backend/PostgreSQL/Kafka/Python
+verification with application-data/journal fingerprints. It uses disposable test
+databases, diagnostic topics and temporary journals. See [the failure/recovery
+guide](docs/PHASE6_GUIDE.md) and [Phase 6 evidence](docs/PHASE6_RESULTS.md).

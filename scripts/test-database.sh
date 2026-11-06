@@ -5,22 +5,31 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 phase3_kafka=false
+phase6=false
 test_selectors=(--tests com.vortex.persistence.PersistenceFoundationIntegrationTest
   --tests com.vortex.messaging.Phase3PersistenceIntegrationTest
   --tests com.vortex.workflow.Phase4WorkflowIntegrationTest
   --tests com.vortex.workflow.Phase4MigrationIntegrationTest)
 case "${1:-}" in
   '') ;;
-  --with-kafka)
+  --phase6-only)
+    phase6=true
+    test_selectors=(--tests com.vortex.workflow.Phase6ReliabilityIntegrationTest)
+    ;;
+  --with-kafka|--phase6)
+    if [[ "$1" == --phase6 ]]; then
+      phase6=true
+      test_selectors+=(--tests com.vortex.workflow.Phase6ReliabilityIntegrationTest)
+    fi
     phase3_kafka=true
     test_selectors+=(--tests com.vortex.messaging.Phase3KafkaIntegrationTest
       --tests com.vortex.persistence.KafkaTopicPolicyIntegrationTest
       --tests com.vortex.workflow.Phase4KafkaIntegrationTest)
     ;;
-  *) printf 'Usage: %s [--with-kafka]\n' "$0" >&2; exit 2 ;;
+  *) printf 'Usage: %s [--with-kafka|--phase6|--phase6-only]\n' "$0" >&2; exit 2 ;;
 esac
 if (( $# > 1 )); then
-  printf 'Usage: %s [--with-kafka]\n' "$0" >&2
+  printf 'Usage: %s [--with-kafka|--phase6|--phase6-only]\n' "$0" >&2
   exit 2
 fi
 
@@ -45,4 +54,5 @@ VORTEX_DB_INTEGRATION_TEST=true \
 VORTEX_PHASE3_KAFKA_TEST="$phase3_kafka" \
 VORTEX_KAFKA_INTEGRATION_TEST="$phase3_kafka" \
 VORTEX_PHASE4_KAFKA_TEST="$phase3_kafka" \
+VORTEX_PHASE6_TEST="$phase6" \
   ./gradlew --no-daemon --rerun-tasks :backend:test "${test_selectors[@]}"

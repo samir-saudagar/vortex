@@ -184,3 +184,62 @@ def test_exact_broker_command_reports_restart_duplicate_uncertainty_and_quaranti
         adapter.close()
         report_observer.close(autocommit=False)
         quarantine_observer.close(autocommit=False)
+
+
+def test_manual_quarantine_redrive_preserves_bytes_and_executes_movement_once(
+        simulator_config, command_document, monkeypatch):
+    """Operator-selected redrive after fixing a transient handler bug, through normal validation."""
+    prefix = 'vortex.phase6-test.' + str(uuid4())
+    topics = [prefix + suffix for suffix in ('.commands', '.reports', '.quarantine')]
+    bootstrap = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', simulator_config.bootstrap_servers)
+    admin = KafkaAdminClient(bootstrap_servers=bootstrap)
+    admin.create_topics([NewTopic(topic, 1, 1) for topic in topics])
+    config = replace(simulator_config, bootstrap_servers=bootstrap, command_topic=topics[0], report_topic=topics[1],
+                     quarantine_topic=topics[2], consumer_group=prefix + '-python')
+    delays = []
+    adapter = KafkaSimulator(config, sleep=delays.append)
+    quarantine = _consumer(config.bootstrap_servers, config.quarantine_topic, start_at_end=True)
+    reports = _consumer(config.bootstrap_servers, config.report_topic, start_at_end=True)
+    document = _fresh(command_document)
+    original = json.dumps(document, separators=(',', ':')).encode()
+    key = document['aggregateId'].encode()
+    simulate = service_module.simulate_movement
+    calls = []
+    def broken(*args, **kwargs):
+        raise RuntimeError('test-only handler bug before movement')
+    try:
+        # Fail before journal intent, so this fault has not authorized a movement.
+        process = adapter.service.process_command
+        monkeypatch.setattr(adapter.service, 'process_command', broken)
+        adapter.producer.send(config.command_topic, key=key, value=original).get(timeout=10)
+        _process_one(adapter)
+        wrapper = _read(quarantine, document['eventId'], 1)[0][1]
+        assert wrapper['attempts'] == 4
+        assert delays == [1, 5, 15]
+        assert base64.b64decode(wrapper['originalRawBase64'], validate=True) == original
+        assert base64.b64decode(wrapper['originalKeyBase64'], validate=True) == key
+        monkeypatch.setattr(adapter.service, 'process_command', process)
+        def counted(*args, **kwargs):
+            calls.append(1)
+            return simulate(*args, **kwargs)
+        monkeypatch.setattr(service_module, 'simulate_movement', counted)
+        saved = None
+        for _ in range(2):
+            # The documented manual procedure: original topic/key/bytes, with no identifier rewrite.
+            adapter.producer.send(wrapper['sourceTopic'],
+                                  key=base64.b64decode(wrapper['originalKeyBase64'], validate=True),
+                                  value=base64.b64decode(wrapper['originalRawBase64'], validate=True)).get(timeout=10)
+            _process_one(adapter)
+            delivered = _read(reports, document['eventId'], 4)
+            wire = [record.value for record, _ in delivered]
+            if saved is not None:
+                assert wire == saved
+            saved = wire
+            assert all(envelope['correlationId'] == document['correlationId'] for _, envelope in delivered)
+            assert delivered[-1][1]['payload']['routeId'] == document['payload']['routeId']
+        assert calls == [1], 'A second manual redrive must only replay journaled reports'
+    finally:
+        adapter.close()
+        quarantine.close()
+        reports.close()
+        admin.close()
